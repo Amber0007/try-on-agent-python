@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI 虚拟试衣 Agent</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <div class="container">
+    <!-- 侧边栏 -->
+    <aside class="sidebar">
+      <div class="logo">
+        <h1>👔 AI 试衣</h1>
+      </div>
+      <nav class="nav-menu">
+        <a href="#try-on" class="nav-item active" data-section="try-on">
+          <span class="icon">👗</span>
+          <span>虚拟试衣</span>
+        </a>
+        <a href="#outfits" class="nav-item" data-section="outfits">
+          <span class="icon">📸</span>
+          <span>服装管理</span>
+        </a>
+        <a href="#avatars" class="nav-item" data-section="avatars">
+          <span class="icon">👤</span>
+          <span>数字人</span>
+        </a>
+        <a href="#knowledge" class="nav-item" data-section="knowledge">
+          <span class="icon">💡</span>
+          <span>穿搭知识库</span>
+        </a>
+      </nav>
+    </aside>
+
+    <!-- 主内容区 -->
+    <main class="main-content">
+      <!-- 虚拟试衣 section -->
+      <section id="try-on" class="section active">
+        <h2>虚拟试衣</h2>
+        <div class="try-on-container">
+          <div class="selection-panel">
+            <div class="panel-box">
+              <h3>1. 选择服装</h3>
+              <div class="item-grid" id="outfit-selection">
+                <!-- 动态加载 -->
+              </div>
+              <button class="btn btn-secondary" onclick="showAddOutfitModal()">+ 添加服装</button>
+            </div>
+
+            <div class="panel-box">
+              <h3>2. 选择数字人</h3>
+              <div class="filter-bar">
+                <select id="avatar-gender-filter" onchange="loadAvatars()">
+                  <option value="">全部性别</option>
+                  <option value="female">女性</option>
+                  <option value="male">男性</option>
+                </select>
+                <select id="avatar-body-filter" onchange="loadAvatars()">
+                  <option value="">全部身材</option>
+                  <option value="slim">纤瘦</option>
+                  <option value="standard">标准</option>
+                  <option value="curvy">曲线</option>
+                  <option value="plus">丰满</option>
+                </select>
+                <select id="avatar-pose-filter" onchange="loadAvatars()">
+                  <option value="">全部姿势</option>
+                  <option value="standing_front">正面站立</option>
+                  <option value="standing_side">侧面站立</option>
+                  <option value="sitting">坐姿</option>
+                  <option value="walking">行走</option>
+                </select>
+              </div>
+              <div class="item-grid" id="avatar-selection">
+                <!-- 动态加载 -->
+              </div>
+            </div>
+          </div>
+
+          <div class="preview-panel">
+            <div class="preview-box">
+              <h3>试衣预览</h3>
+              <div class="preview-area" id="preview-area">
+                <div class="empty-state">
+                  <p>请选择服装和数字人开始试衣</p>
+                </div>
+              </div>
+            </div>
+            <button class="btn btn-primary btn-large" id="try-on-btn" onclick="executeTryOn()" disabled>
+              开始试衣
+            </button>
+            <div id="try-on-result" class="result-area"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 服装管理 section -->
+      <section id="outfits" class="section">
+        <h2>服装管理</h2>
+        <div class="toolbar">
+          <button class="btn btn-primary" onclick="showAddOutfitModal()">+ 添加服装</button>
+          <input type="text" id="outfit-search" placeholder="搜索服装..." class="search-input">
+        </div>
+        <div class="item-grid large" id="outfit-list">
+          <!-- 动态加载 -->
+        </div>
+      </section>
+
+      <!-- 数字人 section -->
+      <section id="avatars" class="section">
+        <h2>数字人管理</h2>
+        <div class="toolbar">
+          <button class="btn btn-primary" onclick="showCreateAvatarModal()">+ 创建数字人</button>
+        </div>
+        <div class="item-grid large" id="avatar-list">
+          <!-- 动态加载 -->
+        </div>
+      </section>
+
+      <!-- 穿搭知识库 section -->
+      <section id="knowledge" class="section">
+        <h2>穿搭知识库</h2>
+        <div class="toolbar">
+          <button class="btn btn-primary" onclick="showAddKnowledgeModal()">+ 添加穿搭</button>
+        </div>
+
+        <div class="tabs">
+          <button class="tab active" data-tab="outfits">穿搭案例</button>
+          <button class="tab" data-tab="rules">穿搭规则</button>
+        </div>
+
+        <div class="tab-content active" id="tab-outfits">
+          <div class="item-grid" id="knowledge-list">
+            <!-- 动态加载 -->
+          </div>
+        </div>
+
+        <div class="tab-content" id="tab-rules">
+          <div class="rules-container" id="rules-display">
+            <!-- 动态加载 -->
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- 模态框：添加服装 -->
+  <div class="modal" id="add-outfit-modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>添加服装</h3>
+        <button class="close-btn" onclick="closeModal('add-outfit-modal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="tab-group">
+          <button class="tab-btn active" onclick="switchOutfitTab('url')">URL 输入</button>
+          <button class="tab-btn" onclick="switchOutfitTab('upload')">本地上传</button>
+        </div>
+
+        <div id="outfit-url-tab" class="tab-panel active">
+          <label>淘宝图片 URL</label>
+          <input type="text" id="outfit-url-input" placeholder="粘贴淘宝图片链接...">
+        </div>
+
+        <div id="outfit-upload-tab" class="tab-panel">
+          <label>上传图片</label>
+          <input type="file" id="outfit-file-input" accept="image/*">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('add-outfit-modal')">取消</button>
+        <button class="btn btn-primary" onclick="submitOutfit()">确定</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 模态框：创建数字人 -->
+  <div class="modal" id="create-avatar-modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>创建自定义数字人</h3>
+        <button class="close-btn" onclick="closeModal('create-avatar-modal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="create-avatar-form">
+          <div class="form-group">
+            <label>名称</label>
+            <input type="text" name="name" placeholder="自定义数字人名称">
+          </div>
+          <div class="form-group">
+            <label>性别</label>
+            <select name="gender">
+              <option value="female">女性</option>
+              <option value="male">男性</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>身材类型</label>
+            <select name="bodyType">
+              <option value="slim">纤瘦型</option>
+              <option value="standard">标准型</option>
+              <option value="curvy">曲线型</option>
+              <option value="plus">丰满型</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>肤色</label>
+            <select name="skinTone">
+              <option value="fair">白皙</option>
+              <option value="light">浅色</option>
+              <option value="medium">中等</option>
+              <option value="olive">橄榄</option>
+              <option value="dark">深色</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>姿势</label>
+            <select name="pose">
+              <option value="standing_front">正面站立</option>
+              <option value="standing_side">侧面站立</option>
+              <option value="sitting">坐姿</option>
+              <option value="walking">行走</option>
+            </select>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('create-avatar-modal')">取消</button>
+        <button class="btn btn-primary" onclick="submitAvatar()">创建</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 模态框：添加穿搭知识 -->
+  <div class="modal" id="add-knowledge-modal">
+    <div class="modal-content modal-large">
+      <div class="modal-header">
+        <h3>添加穿搭案例</h3>
+        <button class="close-btn" onclick="closeModal('add-knowledge-modal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="add-knowledge-form">
+          <div class="form-row">
+            <div class="form-group">
+              <label>穿搭图片</label>
+              <input type="file" id="knowledge-image" accept="image/*" required>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>名称</label>
+              <input type="text" name="name" placeholder="穿搭名称">
+            </div>
+            <div class="form-group">
+              <label>风格</label>
+              <select name="style">
+                <option value="casual">休闲风</option>
+                <option value="formal">正式风</option>
+                <option value="sporty">运动风</option>
+                <option value="elegant">优雅风</option>
+                <option value="street">街头风</option>
+                <option value="minimalist">极简风</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>适合季节</label>
+              <div class="checkbox-group">
+                <label><input type="checkbox" name="season" value="spring"> 春</label>
+                <label><input type="checkbox" name="season" value="summer"> 夏</label>
+                <label><input type="checkbox" name="season" value="autumn"> 秋</label>
+                <label><input type="checkbox" name="season" value="winter"> 冬</label>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>适合场合</label>
+              <div class="checkbox-group">
+                <label><input type="checkbox" name="occasion" value="daily"> 日常</label>
+                <label><input type="checkbox" name="occasion" value="work"> 工作</label>
+                <label><input type="checkbox" name="occasion" value="party"> 聚会</label>
+                <label><input type="checkbox" name="occasion" value="date"> 约会</label>
+                <label><input type="checkbox" name="occasion" value="travel"> 旅行</label>
+              </div>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>描述</label>
+            <textarea name="description" rows="3" placeholder="穿搭描述..."></textarea>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('add-knowledge-modal')">取消</button>
+        <button class="btn btn-primary" onclick="submitKnowledge()">添加</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

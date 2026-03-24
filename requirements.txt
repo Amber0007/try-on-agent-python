@@ -1,0 +1,15 @@
+# Web 框架
+flask==2.2.5
+flask-cors==4.0.0
+
+# HTTP 请求
+requests==2.31.0
+
+# 文件上传
+werkzeug==2.2.3
+
+# 图像处理
+Pillow==9.5.0
+
+# 环境变量
+python-dotenv==0.21.0
