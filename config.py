@@ -13,9 +13,10 @@ DASHSCOPE_API_KEY = os.getenv('DASHSCOPE_API_KEY', '')
 REMOVE_BG_API_KEY = os.getenv('REMOVE_BG_API_KEY', '')
 
 # DashScope API 配置
+# 参考：https://help.aliyun.com/zh/dashscope/developer-reference/virtual-try-on
 DASHSCOPE_BASE_URL = 'https://dashscope.aliyuncs.com/api/v1'
-DASHSCOPE_VTON_MODEL = 'wanx-virtual-try-on-v1'
-DASHSCOPE_VL_MODEL = 'qwen-vl-max'
+DASHSCOPE_VL_MODEL = 'qwen3.5-flash'        # 图像理解模型
+DASHSCOPE_VTON_MODEL = 'wanx-virtual-try-on-v1'   # 虚拟试衣模型
 
 # Remove.bg API 配置
 REMOVE_BG_BASE_URL = 'https://api.remove.bg/v1.0'

@@ -165,6 +165,7 @@ class OutfitService:
             outfits.append({
                 'id': file_path.stem,
                 'masked_url': f'/data/outfits/masked/{file_path.name}',
+                'masked_path': str(file_path.absolute()),  # 添加本地路径
                 'created_at': datetime.fromtimestamp(file_path.stat().st_ctime).isoformat()
             })
         return outfits
@@ -183,8 +184,14 @@ class OutfitService:
 
     def get_outfit(self, outfit_id: str) -> typing.Optional[dict]:
         """获取单个服装信息"""
-        outfits = self.list_outfits()
-        for outfit in outfits:
-            if outfit['id'] == outfit_id:
-                return outfit
-        return None
+        masked_dir = self.storage_path / 'masked'
+        file_path = masked_dir / f'{outfit_id}.png'
+
+        if not file_path.exists():
+            return None
+
+        return {
+            'id': outfit_id,
+            'masked_url': f'/data/outfits/masked/{outfit_id}.png',
+            'masked_path': str(file_path.absolute())
+        }
