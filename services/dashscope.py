@@ -20,21 +20,27 @@ class DashScopeService:
         # 配置 SDK 的 API key
         dashscope.api_key = self.api_key
 
-    def virtual_try_on(self, garment_image: str, model_image: str) -> str:
+    def virtual_try_on(self, garment_image: str, model_image: str) -> dict:
         """
-        虚拟试衣 - 将服装迁移到模特图
+        虚拟试衣 - 分析服装搭配效果
 
         Args:
-            garment_image: 服装图片文件路径
+            garment_image: 服装图片文件路径（已去背的服装）
             model_image: 模特底图文件路径
 
         Returns:
-            生成结果的图片 URL
+            分析结果和穿搭建议
         """
         if not self.api_key:
             raise ValueError("DashScope API Key 未配置")
 
-        print(f"提交虚拟试衣任务...")
+        # 检查图片格式，SVG 格式不被支持
+        if self._is_svg_file(model_image):
+            raise Exception("数字人图片是 SVG 格式，不被 DashScope API 支持。请使用 PNG 或 JPEG 格式的真实人像图片。")
+        if self._is_svg_file(garment_image):
+            raise Exception("服装图片是 SVG 格式，不被 DashScope API 支持。请使用 PNG 或 JPEG 格式的图片。")
+
+        print(f"分析服装搭配效果...")
         print(f"Garment: {garment_image}")
         print(f"Model: {model_image}")
 
@@ -42,13 +48,23 @@ class DashScopeService:
         garment_base64 = self._encode_image(garment_image)
         model_base64 = self._encode_image(model_image)
 
-        # 使用 dashscope SDK 调用
-        from dashscope import Generation
+        # 使用 qwen3.5-plus 多模态模型进行分析
+        from dashscope import MultiModalConversation
 
-        prompt = """将这件服装穿到模特身上，保持服装的细节和颜色不变。
-        输出高质量的虚拟试衣结果图片。"""
+        prompt = """请分析这张服装穿在模特身上的效果：
+1. 描述服装的款式、颜色、材质特点
+2. 分析服装与模特身形、肤色的搭配效果
+3. 给出穿搭建议（适合的场合、季节、配饰建议）
+4. 如果要使用 AI 绘图工具生成试衣效果，请提供英文 prompt
 
-        # 构造多模态输入 - 使用 base64 格式
+请以 JSON 格式返回，包含以下字段：
+- style_description: 服装风格描述
+- color_analysis: 色彩分析
+- fit_analysis: 版型与身形匹配度
+- occasion_suggestions: 适合场合列表
+- season_suggestions: 适合季节列表
+- ai_prompt: AI 绘图用的英文提示词"""
+
         messages = [
             {
                 "role": "user",
@@ -60,30 +76,73 @@ class DashScopeService:
             }
         ]
 
-        # 尝试使用 qwen-vl-max 进行图像处理和生成
-        response = Generation.call(
-            model="qwen-vl-max",
+        response = MultiModalConversation.call(
+            model="qwen3.5-plus",
             messages=messages
         )
 
-        print(f"SDK 响应：{response}")
+        print(f"分析完成")
 
         if response.status_code == 200:
-            result = response.output.choices[0].message.content
-            print(f"生成结果：{result}")
-            # 如果返回的是文本，提取图片 URL
-            import re
-            img_match = re.search(r'!\[.*?\]\((https?://.*?)\)', result)
-            if img_match:
-                return img_match.group(1)
-            # 如果返回的是图片对象
-            if isinstance(result, list):
-                for item in result:
-                    if isinstance(item, dict) and 'image' in item:
-                        return item['image']
-            return str(result)
+            result_text = response.output.choices[0].message.content[0]['text']
+            print(f"分析结果：{result_text[:500]}...")
+            return {
+                'success': True,
+                'analysis': result_text,
+                'type': 'fashion_analysis'
+            }
         else:
             raise Exception(f"API 请求失败：{response.code} - {response.message}")
+
+    def _wanx_virtual_try_on(self, garment_image: str, model_image: str) -> str:
+        """使用 Wanx 虚拟试衣 API"""
+        headers = {
+            'Authorization': f'Bearer {self.api_key}',
+            'Content-Type': 'application/json'
+        }
+
+        # 使用 file:// 格式传递本地图片
+        garment_path = Path(garment_image).absolute()
+        model_path = Path(model_image).absolute()
+
+        # 通义万相虚拟试衣 API
+        # 文档：https://help.aliyun.com/zh/dashscope/developer-reference/virtual-try-on
+        task_url = "https://dashscope.aliyuncs.com/api/v1/services/aigc/image-generation/virtual-try-on"
+        payload = {
+            "model": "wanx-virtual-try-on-turbo-v1",
+            "input": {
+                "person_img": f"file://{model_path}",
+                "cloth_img": f"file://{garment_path}"
+            },
+            "parameters": {
+                "size": "1024*1024"
+            }
+        }
+
+        print(f"提交到：{task_url}")
+        print(f"Payload: {json.dumps(payload, indent=2, ensure_ascii=False)[:500]}")
+
+        response = requests.post(task_url, headers=headers, json=payload)
+        print(f"提交响应：{response.status_code}")
+        print(f"响应内容：{response.text[:1000]}")
+
+        if response.status_code != 200:
+            error_data = response.json()
+            raise Exception(f"API 请求失败：{error_data.get('message', response.text)}")
+
+        result = response.json()
+        print(f"完整响应：{json.dumps(result, indent=2)[:1000]}")
+
+        # 检查任务状态
+        task_id = result.get('output', {}).get('task_id')
+        if not task_id:
+            # 可能是同步返回
+            if result.get('output', {}).get('image_url'):
+                return result['output']['image_url']
+            raise Exception(f"未获取到任务 ID: {result}")
+
+        # 轮询任务状态
+        return self._poll_task_status(task_id, headers)
 
     def _virtual_try_on_http(self, garment_image: str, model_image: str) -> str:
         """HTTP 方式调用虚拟试衣 API"""
@@ -162,10 +221,56 @@ class DashScopeService:
         raise Exception("任务超时")
 
     def _encode_image(self, image_path: str) -> str:
-        """将图片编码为 base64"""
+        """将图片编码为 base64，根据文件实际内容检测 MIME 类型"""
+        from PIL import Image
+
+        # 先检查是否是 SVG 文件（Pillow 不支持 SVG）
+        ext = Path(image_path).suffix.lower()
+        if ext == '.svg' or self._is_svg_file(image_path):
+            with open(image_path, 'rb') as f:
+                image_data = base64.b64encode(f.read()).decode('utf-8')
+            return f"data:image/svg+xml;base64,{image_data}"
+
+        # 使用 Pillow 检测真实图片格式
+        try:
+            with Image.open(image_path) as img:
+                format_map = {
+                    'JPEG': 'jpeg',
+                    'PNG': 'png',
+                    'GIF': 'gif',
+                    'WEBP': 'webp',
+                    'BMP': 'bmp'
+                }
+                image_format = format_map.get(img.format, 'jpeg')
+        except Exception:
+            # 如果 Pillow 无法识别，根据扩展名回退
+            image_format = self._get_mime_from_extension(image_path)
+
         with open(image_path, 'rb') as f:
             image_data = base64.b64encode(f.read()).decode('utf-8')
-        return f"data:image/png;base64,{image_data}"
+        return f"data:image/{image_format};base64,{image_data}"
+
+    def _is_svg_file(self, image_path: str) -> bool:
+        """检查文件是否是 SVG 格式"""
+        try:
+            with open(image_path, 'rb') as f:
+                header = f.read(100)
+                return b'<svg' in header
+        except Exception:
+            return False
+
+    def _get_mime_from_extension(self, image_path: str) -> str:
+        """根据文件扩展名获取 MIME 类型（回退方法）"""
+        ext = Path(image_path).suffix.lower()
+        mime_map = {
+            '.jpg': 'jpeg',
+            '.jpeg': 'jpeg',
+            '.png': 'png',
+            '.gif': 'gif',
+            '.webp': 'webp',
+            '.svg': 'svg+xml'
+        }
+        return mime_map.get(ext, 'jpeg')
 
     def analyze_garment(self, image_path: str) -> dict:
         """
@@ -205,7 +310,7 @@ class DashScopeService:
         }
 
         headers = {
-            'Authorization': f'Bearer {api_key}',
+            'Authorization': f'Bearer {self.api_key}',
             'Content-Type': 'application/json'
         }
 

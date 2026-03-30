@@ -432,16 +432,80 @@ async function executeTryOn() {
       method: 'POST',
       body: JSON.stringify({
         outfitId: state.selectedOutfit,
-        avatarId: state.selectedAvatar
+        avatarId: state.selectedAvatar,
+        mode: 'analysis'  // 默认使用分析模式
       })
     });
 
     if (result.success) {
-      resultArea.innerHTML = `
-        <h4>试衣完成!</h4>
-        <img src="${result.imageUrl}" alt="试衣结果">
-      `;
-      showToast('试衣成功', 'success');
+      // 处理不同类型的结果
+      if (result.type === 'virtual_try_on' && result.imageUrl) {
+        // 图片生成模式
+        resultArea.innerHTML = `
+          <h4>试衣完成!</h4>
+          <img src="${result.imageUrl}" alt="试衣结果" style="max-width: 100%; border-radius: 8px;">
+        `;
+        showToast('试衣成功', 'success');
+      } else if (result.type === 'fashion_analysis' && result.analysis) {
+        // 分析模式 - 解析并显示 JSON 结果
+        let analysisData;
+        try {
+          // 尝试解析 JSON
+          const jsonMatch = result.analysis.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            analysisData = JSON.parse(jsonMatch[0]);
+          }
+        } catch (e) {
+          analysisData = null;
+        }
+
+        if (analysisData) {
+          resultArea.innerHTML = `
+            <h4>穿搭分析</h4>
+            <div style="text-align: left; max-width: 600px; margin: 0 auto;">
+              <div style="margin-bottom: 1rem;">
+                <strong>风格描述:</strong>
+                <p style="margin: 0.5rem 0; color: #555;">${analysisData.style_description || 'N/A'}</p>
+              </div>
+              <div style="margin-bottom: 1rem;">
+                <strong>色彩分析:</strong>
+                <p style="margin: 0.5rem 0; color: #555;">${analysisData.color_analysis || 'N/A'}</p>
+              </div>
+              <div style="margin-bottom: 1rem;">
+                <strong>版型分析:</strong>
+                <p style="margin: 0.5rem 0; color: #555;">${analysisData.fit_analysis || 'N/A'}</p>
+              </div>
+              <div style="margin-bottom: 1rem;">
+                <strong>适合场合:</strong>
+                <div style="margin: 0.5rem 0;">
+                  ${(analysisData.occasion_suggestions || []).map(s => `<span class="tag" style="margin-right: 0.5rem;">${s}</span>`).join('')}
+                </div>
+              </div>
+              <div style="margin-bottom: 1rem;">
+                <strong>适合季节:</strong>
+                <div style="margin: 0.5rem 0;">
+                  ${(analysisData.season_suggestions || []).map(s => `<span class="tag" style="margin-right: 0.5rem;">${s}</span>`).join('')}
+                </div>
+              </div>
+              <div style="margin-bottom: 1rem;">
+                <strong>AI 绘图 Prompt:</strong>
+                <p style="margin: 0.5rem 0; color: #555; font-size: 0.85rem; background: #f5f5f5; padding: 0.75rem; border-radius: 4px;">${analysisData.ai_prompt || 'N/A'}</p>
+              </div>
+            </div>
+          `;
+        } else {
+          resultArea.innerHTML = `
+            <h4>穿搭分析</h4>
+            <p style="white-space: pre-wrap; text-align: left; max-width: 600px; margin: 0 auto;">${result.analysis}</p>
+          `;
+        }
+        showToast('分析完成', 'success');
+      } else {
+        resultArea.innerHTML = `
+          <h4>结果</h4>
+          <p style="text-align: left; white-space: pre-wrap;">${JSON.stringify(result, null, 2)}</p>
+        `;
+      }
     } else {
       resultArea.innerHTML = `
         <div class="empty-state">

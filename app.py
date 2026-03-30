@@ -13,6 +13,7 @@ from services.outfit import OutfitService
 from services.avatar import AvatarService
 from services.knowledge import KnowledgeService
 from services.dashscope import DashScopeService
+from services.replicate_vton import ReplicateVTONService
 
 # 加载环境变量
 load_dotenv()
@@ -61,6 +62,7 @@ def try_on():
     data = request.json
     outfit_id = data.get('outfitId')
     avatar_id = data.get('avatarId')
+    mode = data.get('mode', 'analysis')  # 'analysis' 或 'generate'
 
     if not outfit_id or not avatar_id:
         return jsonify({'error': '缺少 outfitId 或 avatarId'}), 400
@@ -75,38 +77,56 @@ def try_on():
     if not avatar:
         return jsonify({'error': '未找到指定的数字人'}), 404
 
-    # 执行试衣（需要 API Key）
-    api_key = os.getenv('DASHSCOPE_API_KEY')
-    if not api_key:
-        return jsonify({
-            'success': False,
-            'error': 'DashScope API Key 未配置',
-            'fallback': {
-                'message': '请配置 DASHSCOPE_API_KEY 后使用虚拟试衣功能',
-                'debug': {
-                    'outfit_path': outfit.get('masked_path'),
-                    'avatar_path': avatar.get('imageUrl')
-                }
-            }
-        }), 503
+    # 准备图片路径
+    garment_path = outfit['masked_path']
+    model_path = avatar['imageUrl'].replace('/data/avatars', str(PATHS['avatars']))
 
-    try:
-        dashscope = DashScopeService(api_key)
-        # 注意：这里需要实际的文件路径
-        result_url = dashscope.virtual_try_on(
-            outfit['masked_path'],
-            avatar['imageUrl'].replace('/data/avatars', str(PATHS['avatars']))
-        )
-        return jsonify({
-            'success': True,
-            'imageUrl': result_url,
-            'created_at': data.get('created_at')
-        })
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+    # 根据模式选择服务
+    if mode == 'generate':
+        # 模式 1：使用 Replicate 生成真实试衣图片
+        replicate_key = os.getenv('REPLICATE_API_KEY')
+        if not replicate_key:
+            return jsonify({
+                'success': False,
+                'error': 'REPLICATE_API_KEY 未配置',
+                'message': '请在 Replicate (https://replicate.com) 获取 API key，或切换到 analysis 模式'
+            }), 503
+
+        try:
+            vton_service = ReplicateVTONService(replicate_key)
+            result = vton_service.virtual_try_on(garment_path, model_path)
+            return jsonify(result)
+        except Exception as e:
+            return jsonify({
+                'success': False,
+                'error': str(e)
+            }), 500
+
+    else:
+        # 模式 2（默认）：使用 DashScope 进行穿搭分析
+        dashscope_key = os.getenv('DASHSCOPE_API_KEY')
+        if not dashscope_key:
+            return jsonify({
+                'success': False,
+                'error': 'DashScope API Key 未配置',
+                'fallback': {
+                    'message': '请配置 DASHSCOPE_API_KEY 后使用虚拟试衣功能',
+                    'debug': {
+                        'outfit_path': outfit.get('masked_path'),
+                        'avatar_path': avatar.get('imageUrl')
+                    }
+                }
+            }), 503
+
+        try:
+            dashscope = DashScopeService(dashscope_key)
+            result = dashscope.virtual_try_on(garment_path, model_path)
+            return jsonify(result)
+        except Exception as e:
+            return jsonify({
+                'success': False,
+                'error': str(e)
+            }), 500
 
 
 # ---- 服装管理 ----
